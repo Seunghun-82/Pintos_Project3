@@ -116,7 +116,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    struct hash vm;
+    struct hash vm_table;
   };
 
 /* If false (default), use round-robin scheduler.

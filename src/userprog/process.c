@@ -125,7 +125,7 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  vm_init(&(thread_current()->vm));           // ! pintos project 3 newly added
+  vm_init(&(thread_current()->vm_table));           // ! pintos project 3 newly added
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -236,7 +236,7 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  vm_destroy(&(cur->vm));     // ! pintos project 3 newly added
+  vm_destroy(&(cur->vm_table));     // ! pintos project 3 newly added
   pd = cur->pagedir;
   if (pd != NULL)
     {
@@ -559,7 +559,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
        check->offset = ofs;
        check->file = file;
 
-       hash_insert(&(thread_current()->vm), check);
+       hash_insert(&(thread_current()->vm_table), check);
 
       }
       else
@@ -569,7 +569,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           struct vm_entry* check = find_vme(kpage);
-          hash_delete(&(thread_current()->vm), &(check->hash_elem));
+          hash_delete(&(thread_current()->vm_table), &(check->hash_elem));
           palloc_free_page (kpage);
           pagedir_clear_page(&(thread_current()->pagedir), check->vaddr);
          
@@ -583,7 +583,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable))
         {
           struct vm_entry* check = find_vme(kpage);
-          hash_delete(&(thread_current()->vm), &(check->hash_elem));
+          hash_delete(&(thread_current()->vm_table), &(check->hash_elem));
           palloc_free_page (kpage);
           pagedir_clear_page(&(thread_current()->pagedir), check->vaddr);
 
@@ -617,11 +617,11 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  printf("in setup\n");
+  // printf("in setup\n");
   struct vm_entry* check = (struct vm_entry*)malloc(sizeof(struct vm_entry));
   check->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
-  hash_insert(&(thread_current()->vm), &(check->hash_elem));
+  hash_insert(&(thread_current()->vm_table), &(check->hash_elem));
 
   return success;
 }
