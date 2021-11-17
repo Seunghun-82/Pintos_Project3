@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Pintos
 
 Pintos, a simple operating system framework for the 80x86 architecture created at Stanford University
@@ -38,3 +39,6 @@ Refer to [here](https://github.com/ivogeorg/os-playground/blob/master/pintos-wit
 # Pintos-Project2
 Pintos Project 2
 >>>>>>> 024dfce2861100170bfd28a4c83cf94a555f2432
+=======
+# Pintos_Project3
+>>>>>>> 8b121a63c8cd79da67df7c9dd256b94b69437175

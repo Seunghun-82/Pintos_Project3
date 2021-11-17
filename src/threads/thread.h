@@ -81,6 +81,9 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+
+#include <lib/kernel/hash.h>
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -113,6 +116,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    struct hash vm;
   };
 
 /* If false (default), use round-robin scheduler.

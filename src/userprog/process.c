@@ -18,7 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-// #include "vm/page.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -125,7 +125,7 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  // vm_init(&(thread_current()->vm));           // ! pintos project 3 newly added
+  vm_init(&(thread_current()->vm));           // ! pintos project 3 newly added
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -236,7 +236,7 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  // vm_destroy(&(cur->vm));     // ! pintos project 3 newly added
+  vm_destroy(&(cur->vm));     // ! pintos project 3 newly added
   pd = cur->pagedir;
   if (pd != NULL)
     {
@@ -533,6 +533,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
+
+  printf("sdfsdf\n");
+  long long i;
+  for(i=0; ; i++);
   while (read_bytes > 0 || zero_bytes > 0)
     {
       /* Calculate how to fill this page.
@@ -542,14 +546,35 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+
+      void* kpage = palloc_get_page(PAL_USER);
+      printf("***** frame_allocate() : frame for upage 0x%08x is allocated at kpage 0x%08x *****\n", upage, kpage);
+      if(kpage)
+      {
+       struct vm_entry* check = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+       check->vaddr = upage;
+       check->read_bytes = page_read_bytes;
+       check->zero_bytes = page_zero_bytes;
+       check->writable = writable;
+       check->offset = ofs;
+       check->file = file;
+
+       hash_insert(&(thread_current()->vm), check);
+
+      }
+      else
         return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
+          struct vm_entry* check = find_vme(kpage);
+          hash_delete(&(thread_current()->vm), &(check->hash_elem));
           palloc_free_page (kpage);
+          pagedir_clear_page(&(thread_current()->pagedir), check->vaddr);
+         
+          // ! vm_entry check free is needed
+         
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -557,7 +582,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
+          struct vm_entry* check = find_vme(kpage);
+          hash_delete(&(thread_current()->vm), &(check->hash_elem));
           palloc_free_page (kpage);
+          pagedir_clear_page(&(thread_current()->pagedir), check->vaddr);
+
+          // ! vm_entry check free is needed
+
           return false;
         }
 
@@ -586,6 +617,12 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+  printf("in setup\n");
+  struct vm_entry* check = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+  check->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+
+  hash_insert(&(thread_current()->vm), &(check->hash_elem));
+
   return success;
 }
 
