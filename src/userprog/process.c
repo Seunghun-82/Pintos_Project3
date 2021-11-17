@@ -683,3 +683,37 @@ void close_file(int fd)
     cur->file_descriptor[fd] = NULL;
   }
 }
+
+bool handle_mm_fault (struct vm_entry *vme)
+{
+  void* new_page = palloc_get_page(PAL_USER);
+
+  if(new_page == NULL)
+    return false;
+
+  if(vme->type == VM_BIN)
+  {
+    bool load_success = load_file(new_page, vme);
+    if(load_success == false)
+    {
+      palloc_free_page(new_page);
+      return false;
+    }
+    return install_page(vme->vaddr, new_page, vme->writable);
+  }
+  
+  palloc_free_page(new_page);
+  return false;
+}
+
+bool load_file (void* kaddr, struct vm_entry * vme)
+{
+  file_seek(vme->file, vme->offset);
+  int file_success = file_read(vme->file, kaddr, vme->read_bytes);   // return type
+
+  if(file_success != vme->read_bytes)
+    return false;
+  memset(kaddr + vme->read_bytes, 0, vme->zero_bytes);
+
+  return true;
+}

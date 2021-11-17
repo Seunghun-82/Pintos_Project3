@@ -3,12 +3,12 @@
 
 #include "threads/thread.h"
 #include "threads/synch.h"
+#include "vm/page.h"
 
 struct lock file_lock;
-
+void check_valid_buffer(void* buffer, unsigned size, bool to_write);
 void syscall_init (void);
-
-void check_useradd(void *addr);
+struct vm_entry* check_useradd(void *addr);
 void remove_child_process(struct thread *cp);
 struct thread *get_child_process (int pid);
 

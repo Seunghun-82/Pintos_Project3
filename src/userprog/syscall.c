@@ -70,12 +70,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     check_useradd(f->esp + 4);
     check_useradd(f->esp + 8);
     check_useradd(f->esp + 12);
+    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), true);
     f->eax = read(*(int*)(f->esp + 4), *(char **)(f->esp + 8), *(unsigned *)(f->esp + 12));
     break;
   case SYS_WRITE:
     check_useradd(f->esp + 4);
     check_useradd(f->esp + 8);
     check_useradd(f->esp + 12);
+    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), false);
     f->eax = write(*(int*)(f->esp + 4), *(char **)(f->esp + 8), *(unsigned *)(f->esp + 12));
     break;
   case SYS_SEEK:
@@ -98,12 +100,25 @@ syscall_handler (struct intr_frame *f UNUSED)
   // thread_exit ();
 }
 
-void check_useradd(void *addr)
+void check_valid_buffer(void* buffer, unsigned size, bool to_write)
 {
-  if(!is_user_vaddr(addr))
+  int i;
+  for(i = 0; i < size; i++)
+  {
+    struct vm_entry* check = check_useradd(buffer + i);
+      if(check == NULL)
+        exit(-1);
+
+      if(check->writable == false && to_write == true)
+        exit(-1);    
+  }
+}
+
+struct vm_entry* check_useradd(void *addr)
+{
+  if(!is_user_vaddr(addr) || addr < (void *)0x08048000)
     exit(-1);
- 
-  return;
+  return find_vme(addr);
 }
 
 struct thread *get_child_process (int pid)
@@ -137,7 +152,7 @@ void exit(int status)
 
   t->exit_status = status;
 
-  printf("%s: exit(%d)\n", t->name, status);  
+  printf("%s: exit(%d)\n", t->name, status);
 
   thread_exit();
 }

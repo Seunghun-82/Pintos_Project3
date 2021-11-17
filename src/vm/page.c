@@ -35,11 +35,11 @@ struct vm_entry *find_vme(void *vaddr)
     temp->vaddr = pg_round_down(vaddr);
 
     struct hash_elem *e = hash_find(&(thread_current()->vm_table), &(temp->hash_elem));
+    
+    free(temp);
 
     if (e == NULL)
         return NULL;
-
-    free(temp);
 
     return hash_entry(e, struct vm_entry, hash_elem);
 }
