@@ -236,6 +236,9 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  for(i = 0; i < cur->mmap_num; i++)
+    munmap(i);
+
   vm_destroy(&(cur->vm_table));     // ! pintos project 3 newly added
   pd = cur->pagedir;
   if (pd != NULL)
@@ -552,10 +555,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if(kpage)
       {
        struct vm_entry* check = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+       check->type = VM_BIN;
        check->vaddr = upage;
        check->read_bytes = page_read_bytes;
        check->zero_bytes = page_zero_bytes;
+       check->file = NULL;
+
        check->writable = writable;
+       check->is_loaded = false;
+
        check->offset = ofs;
        check->file = file;
 
@@ -620,6 +628,10 @@ setup_stack (void **esp)
   // printf("in setup\n");
   struct vm_entry* check = (struct vm_entry*)malloc(sizeof(struct vm_entry));
   check->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  check->is_loaded = true;
+
+  check->writable = true;
+  check->type = VM_ANON;
 
   hash_insert(&(thread_current()->vm_table), &(check->hash_elem));
 
@@ -692,6 +704,16 @@ bool handle_mm_fault (struct vm_entry *vme)
     return false;
 
   if(vme->type == VM_BIN)
+  {
+    bool load_success = load_file(new_page, vme);
+    if(load_success == false)
+    {
+      palloc_free_page(new_page);
+      return false;
+    }
+    return install_page(vme->vaddr, new_page, vme->writable);
+  }
+  else if(vme->type == VM_FILE)
   {
     bool load_success = load_file(new_page, vme);
     if(load_success == false)

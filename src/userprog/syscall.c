@@ -6,6 +6,7 @@
 #include <filesys/filesys.h>
 #include <devices/shutdown.h>
 #include "threads/synch.h"
+#include "vm/page.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -92,7 +93,16 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_CLOSE:
     check_useradd(f->esp + 4);
     close(*(int*)(f->esp + 4));
-    break;    
+    break;  
+  case SYS_MMAP:
+    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 8);
+    f->eax = mmap(*(int*)(f->esp+4), (void *)(f->esp + 8));
+    break;
+  case SYS_MUNMAP:
+    check_useradd(f->esp + 4);
+    munmap(*(int*)(f->esp+4));
+    break;  
   default:
     break;
   }
@@ -324,4 +334,90 @@ unsigned tell (int fd)
 void close(int fd)
 {
   close_file(fd);
+}
+
+int mmap(int fd, void * addr)
+{
+  check_useradd(addr);
+  struct thread* cur = thread_current();
+  if(2 > fd || fd > 130)      // ! fd limit can be changed 0 or 2
+    return -1;
+  if((cur->file_descriptor[fd]) == NULL)
+    return -1;
+
+  struct file* cur_file = file_reopen(cur->file_descriptor[fd]);
+
+  if(cur_file == NULL)
+    return -1;
+
+  struct mmap_file* new_mmap = (struct mmap_file*)malloc(sizeof(struct mmap_file));
+  list_init(&(new_mmap->vme_list));
+  new_mmap->mapid = cur->mmap_num;
+  cur->mmap_num = cur->mmap_num + 1;
+  new_mmap->file = cur_file;
+  
+  int file_size = file_length(cur_file);
+  int i = 0;
+  while(file_size > 0)
+  {
+    struct vm_entry* new_entry = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+
+    new_entry->type = VM_FILE;
+    new_entry->vaddr = addr + PGSIZE * i;
+
+    new_entry->writable = true;
+    new_entry->is_loaded = false;
+
+    new_entry->file = cur_file;
+    new_entry->offset = PGSIZE * i;
+    new_entry->read_bytes = file_size < PGSIZE ? file_size : PGSIZE;
+    new_entry->zero_bytes = PGSIZE - new_entry->read_bytes;
+
+    new_entry->swap_slot = 0;    
+
+    file_size = file_size - PGSIZE;
+    i++;
+
+    if(insert_vme(&(cur->vm_table), new_entry) == false)      // ! Check free malloc needed
+    {
+      return -1;
+    }
+    list_push_back(&(new_mmap->vme_list), &(new_entry->mmap_elem));
+  }
+
+  list_push_back(&(cur->mmap_list), &(new_mmap->elem));
+
+  return new_mmap->mapid;
+}
+
+void munmap(int map_id)
+{
+  struct thread* cur = thread_current();
+  struct list_elem* e;
+  for(e = list_begin(&cur->mmap_list); e != list_end(&cur->mmap_list); e = list_next(e))
+  {
+    struct mmap_file* check_mmap = list_entry(e, struct mmap_file, elem);
+    if(check_mmap->mapid != map_id)
+      continue;
+    else
+    {
+      struct list_elem* vme_e, * next;
+      for(vme_e = list_begin(&check_mmap->vme_list); vme_e != list_end(&check_mmap->vme_list); vme_e = next)   
+      {
+        
+        // ! If vme is loaded on the physical memory, then remove all the physical memory value
+        // ! If dirtybit is seted, then upload file to disk
+
+        struct vm_entry* rm_vme = list_entry(vme_e, struct vm_entry, mmap_elem);
+        next = list_next(vme_e);
+        list_remove(vme_e);
+        delete_vme(&cur->vm_table, rm_vme);
+      }
+
+      list_remove(e);
+      file_close(check_mmap->file);
+      free(check_mmap);
+      break;
+    }
+  }
 }

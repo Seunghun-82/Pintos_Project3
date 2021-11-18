@@ -21,12 +21,24 @@ void vm_init(struct hash *vm_table)
 
 bool insert_vme(struct hash *vm_table, struct vm_entry *vme)
 {
-    hash_insert(vm_table, vme);
+    if(hash_insert(vm_table, vme) == NULL)
+        return true;
+        
+    return false;
 }
 
 bool delete_vme(struct hash *vm_table, struct vm_entry *vme)
 {
-    hash_delete(vm_table, vme);
+    if(hash_delete(vm_table, vme) == NULL)
+    {
+        free(vme);
+        return false;
+    }
+    else
+    {
+        free(vme);
+        return true;
+    }
 }
 
 struct vm_entry *find_vme(void *vaddr)

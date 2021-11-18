@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "vm/page.h"
+#include "lib/kernel/list.h"
 
 struct lock file_lock;
 void check_valid_buffer(void* buffer, unsigned size, bool to_write);
@@ -25,4 +26,6 @@ void seek(int fd, unsigned position);
 int write(int fd, void *buffer, unsigned size);
 int read (int fd, void *buffer, unsigned size);
 int filesize (int fd);
+int mmap(int fd, void * addr);
+void munmap(int map_id);
 #endif /* userprog/syscall.h */

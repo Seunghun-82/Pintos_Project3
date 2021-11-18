@@ -5,6 +5,7 @@
 #include "filesys/file.h"
 #include "threads/vaddr.h"
 #include "threads/thread.h"
+#include "lib/kernel/list.h"
 
 #define VM_BIN 0
 #define VM_FILE 1
@@ -26,6 +27,13 @@ struct vm_entry{
     size_t swap_slot; 
 
     struct hash_elem hash_elem; 
+};
+
+struct mmap_file{
+    int mapid;
+    struct file* file;
+    struct list_elem elem;
+    struct list vme_list;
 };
 
 void vm_init (struct hash *vm);
