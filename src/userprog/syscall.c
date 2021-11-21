@@ -5,8 +5,6 @@
 #include "threads/vaddr.h"
 #include <filesys/filesys.h>
 #include <devices/shutdown.h>
-#include "threads/synch.h"
-#include "vm/page.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -24,7 +22,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   // printf("in the syscall handler : %d\n", *(int *)(f->esp));
   // printf ("system call! \n");
 
-  check_useradd(f->esp);
+  check_useradd(f->esp, f->esp);
   unsigned int handling_num = *((unsigned int *)(f->esp));
   // unit32_t* arg = (unit32_t *)malloc(sizeof(unit32_t) * num_arg);
 
@@ -39,68 +37,70 @@ syscall_handler (struct intr_frame *f UNUSED)
     halt();
     break;
   case SYS_EXIT:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
     exit(*((int *)(f->esp + 4)));
     break;
   case SYS_EXEC:
-    check_useradd(f->esp + 4);
-    f->eax = exec(*(const char**)(f->esp + 4));
+    check_useradd(f->esp + 4, f->esp);
+    f->eax = sys_exec(*(const char**)(f->esp + 4));
     break;
   case SYS_WAIT:
-    check_useradd(f->esp + 4);
-    f->eax = wait(*(int*)(f->esp + 4));
+    check_useradd(f->esp + 4, f->esp);
+    f->eax = sys_wait(*(int*)(f->esp + 4));
     break;
   case SYS_CREATE:
-    check_useradd(f->esp + 4);
-    check_useradd(f->esp + 8);
+    check_useradd(f->esp + 4, f->esp);
+    check_useradd(f->esp + 8, f->esp);
     f->eax = create((*(char **)(f->esp + 4)), *((unsigned int *)(f->esp + 8)));
     break;
   case SYS_REMOVE:    
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
+    check_valid_string((void *)f->esp + 4, f->esp);
     f->eax = remove(*(char **)(f->esp + 4));
     break;    
   case SYS_OPEN:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
+    check_valid_string((void *)f->esp + 4, f->esp);
     f->eax = open(*(const char**)(f->esp + 4));
     break;    
   case SYS_FILESIZE:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
     f->eax = filesize(*(int *)(f->esp + 4));
     break;    
   case SYS_READ:
-    check_useradd(f->esp + 4);
-    check_useradd(f->esp + 8);
-    check_useradd(f->esp + 12);
-    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), true);
+    check_useradd(f->esp + 4, f->esp);
+    check_useradd(f->esp + 8, f->esp);
+    check_useradd(f->esp + 12, f->esp);
+    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), true, f->esp);
     f->eax = read(*(int*)(f->esp + 4), *(char **)(f->esp + 8), *(unsigned *)(f->esp + 12));
     break;
   case SYS_WRITE:
-    check_useradd(f->esp + 4);
-    check_useradd(f->esp + 8);
-    check_useradd(f->esp + 12);
-    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), false);
+    check_useradd(f->esp + 4, f->esp);
+    check_useradd(f->esp + 8, f->esp);
+    check_useradd(f->esp + 12, f->esp);
+    check_valid_buffer(f->esp + 8, *(unsigned *)(f->esp + 12), false, f->esp);
     f->eax = write(*(int*)(f->esp + 4), *(char **)(f->esp + 8), *(unsigned *)(f->esp + 12));
     break;
   case SYS_SEEK:
-    check_useradd(f->esp + 4);
-    check_useradd(f->esp + 8);
+    check_useradd(f->esp + 4, f->esp);
+    check_useradd(f->esp + 8, f->esp);
     seek(*(int*)(f->esp + 4), *(unsigned *)(f->esp + 8));
     break;
   case SYS_TELL:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
     f->eax = tell(*(int*)(f->esp + 4));
     break;    
   case SYS_CLOSE:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
     close(*(int*)(f->esp + 4));
     break;  
   case SYS_MMAP:
-    check_useradd(f->esp + 4);
-    check_useradd(f->esp + 8);
-    f->eax = mmap(*(int*)(f->esp+4), (void *)(f->esp + 8));
+    check_useradd(f->esp + 4, f->esp);
+    check_useradd(f->esp + 8, f->esp);
+    f->eax = sys_mmap(*(int*)(f->esp+4), (void *)(f->esp + 8));
     break;
   case SYS_MUNMAP:
-    check_useradd(f->esp + 4);
+    check_useradd(f->esp + 4, f->esp);
     munmap(*(int*)(f->esp+4));
     break;  
   default:
@@ -110,12 +110,24 @@ syscall_handler (struct intr_frame *f UNUSED)
   // thread_exit ();
 }
 
-void check_valid_buffer(void* buffer, unsigned size, bool to_write)
+void check_valid_string(void* str, void *esp)
+{
+	char *check_str = (char *)str;
+	check_useradd((void *)check_str, esp);
+	/* check the all string's address */
+	while(*check_str != 0)
+	{
+		check_str += 1;
+		check_useradd(check_str, esp);
+	}
+}
+
+void check_valid_buffer(void* buffer, unsigned size, bool to_write, void* esp)
 {
   int i;
   for(i = 0; i < size; i++)
   {
-    struct vm_entry* check = check_useradd(buffer + i);
+    struct vm_entry* check = check_useradd(buffer + i, esp);
       if(check == NULL)
         exit(-1);
 
@@ -124,11 +136,22 @@ void check_valid_buffer(void* buffer, unsigned size, bool to_write)
   }
 }
 
-struct vm_entry* check_useradd(void *addr)
+struct vm_entry* check_useradd(void *addr, void *esp)
 {
   if(!is_user_vaddr(addr) || addr < (void *)0x08048000)
     exit(-1);
-  return find_vme(addr);
+  struct vm_entry* vme = find_vme(addr);
+  if(vme == NULL)
+  {
+    if(addr >= 32)
+    {
+      if(expand_stack(addr) == false)
+        exit(-1);
+    }
+    else
+      exit(-1);
+  }
+  return vme;
 }
 
 struct thread *get_child_process (int pid)
@@ -171,7 +194,7 @@ int create(const char* file, unsigned int initial_size)
 {
   if(file == NULL)
     exit(-1);
-  check_useradd(file);
+  // check_useradd(file);
   int result;
   result = filesys_create(file, initial_size);
   return result;
@@ -181,16 +204,16 @@ int remove(const char *file)
 {
   if(file == NULL)
     exit(-1);
-  check_useradd(file);
+  // check_useradd(file);
   int result;
   result = filesys_remove(file);
   return result;
 }
 
-tid_t exec (const char *cmd_line)
+int sys_exec (const char *cmd_line)
 {
   tid_t child_tid;
-  check_useradd(cmd_line);
+  // check_useradd(cmd_line);
   child_tid = process_execute(cmd_line);
 
   if (child_tid == -1)
@@ -206,7 +229,7 @@ tid_t exec (const char *cmd_line)
   // return -1;
 }
 
-int wait (tid_t tid)
+int sys_wait (tid_t tid)
 {
   return process_wait(tid);
 }
@@ -215,7 +238,6 @@ int open (const char *file)
 {
   if(file == NULL)
     return -1;
-  check_useradd(file);
   lock_acquire(&file_lock);
   struct file* open_file = filesys_open(file);
 
@@ -243,7 +265,7 @@ int filesize (int fd)
 int read (int fd, void *buffer, unsigned size)
 {
   lock_acquire(&file_lock);
-  check_useradd(buffer);
+  // check_useradd(buffer);
   struct thread *curr = thread_current();
   int ret_val;
   if (curr->file_num < fd || fd == 1 || fd < 0)
@@ -284,7 +306,7 @@ int read (int fd, void *buffer, unsigned size)
 
 int write(int fd, void *buffer, unsigned size)
 {
-  check_useradd(buffer);
+  // check_useradd(buffer);
   struct thread *curr = thread_current();
   if (curr->file_num < fd || fd == 0 || fd < 0)
     return -1;
@@ -336,58 +358,80 @@ void close(int fd)
   close_file(fd);
 }
 
-int mmap(int fd, void * addr)
+int sys_mmap(int fd, void * addr)
 {
-  check_useradd(addr);
-  struct thread* cur = thread_current();
-  if(2 > fd || fd > 130)      // ! fd limit can be changed 0 or 2
-    return -1;
-  if((cur->file_descriptor[fd]) == NULL)
-    return -1;
+  // if (is_kernel_vaddr(addr))
+  //   exit(-1);
 
-  struct file* cur_file = file_reopen(cur->file_descriptor[fd]);
+  if((uint32_t)addr%PGSIZE != 0 || addr == NULL)
+	{
+		return 1;
+	}
+  struct mmap_file* new_mmap = malloc(sizeof(struct mmap_file));
+  if(new_mmap == NULL)
+		return 2;
 
+  if(fd == 0 || fd == 1)      // ! fd limit can be changed 0 or 2
+    return 7;
+
+  struct file* file_ = get_file(fd);
+  if(file_ == NULL)
+    return 4;
+  lock_acquire(&file_lock);
+  struct file* cur_file = file_reopen(file_);
+  lock_release(&file_lock);
   if(cur_file == NULL)
-    return -1;
+    return 5;
 
-  struct mmap_file* new_mmap = (struct mmap_file*)malloc(sizeof(struct mmap_file));
+  struct thread* cur = thread_current();
   list_init(&(new_mmap->vme_list));
-  new_mmap->mapid = cur->mmap_num;
+  // new_mmap->mapid = cur->mmap_num;
   cur->mmap_num = cur->mmap_num + 1;
   new_mmap->file = cur_file;
   
   int file_size = file_length(cur_file);
   int i = 0;
+
+  void *virtual_address = addr;
+  int32_t offset = 0;
+  size_t page_read_bytes;
+
   while(file_size > 0)
   {
-    struct vm_entry* new_entry = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+    struct vm_entry* new_entry = malloc(sizeof(struct vm_entry));
+
+    page_read_bytes = file_size < PGSIZE ? file_size : PGSIZE;
 
     new_entry->type = VM_FILE;
-    new_entry->vaddr = addr + PGSIZE * i;
+    // new_entry->vaddr = addr + PGSIZE * i;
+    new_entry->vaddr = virtual_address;
 
     new_entry->writable = true;
     new_entry->is_loaded = false;
 
     new_entry->file = cur_file;
-    new_entry->offset = PGSIZE * i;
-    new_entry->read_bytes = file_size < PGSIZE ? file_size : PGSIZE;
-    new_entry->zero_bytes = PGSIZE - new_entry->read_bytes;
+    // new_entry->offset = PGSIZE * i;
+    new_entry->offset = offset;
+    new_entry->read_bytes = page_read_bytes;
+    new_entry->zero_bytes = PGSIZE - page_read_bytes;
 
     new_entry->swap_slot = 0;    
 
-    file_size = file_size - PGSIZE;
-    i++;
-
     if(insert_vme(&(cur->vm_table), new_entry) == false)      // ! Check free malloc needed
     {
-      return -1;
+      return 6;
     }
     list_push_back(&(new_mmap->vme_list), &(new_entry->mmap_elem));
+
+    file_size = file_size - page_read_bytes;
+    offset += page_read_bytes;
+    virtual_address += PGSIZE;
+    i++;
   }
 
   list_push_back(&(cur->mmap_list), &(new_mmap->elem));
 
-  return new_mmap->mapid;
+  return 0;
 }
 
 void munmap(int map_id)
@@ -404,18 +448,29 @@ void munmap(int map_id)
       struct list_elem* vme_e, * next;
       for(vme_e = list_begin(&check_mmap->vme_list); vme_e != list_end(&check_mmap->vme_list); vme_e = next)   
       {
-        
-        // ! If vme is loaded on the physical memory, then remove all the physical memory value
-        // ! If dirtybit is seted, then upload file to disk
-
         struct vm_entry* rm_vme = list_entry(vme_e, struct vm_entry, mmap_elem);
+
+        if(rm_vme ->is_loaded == true)
+        {
+          if(pagedir_is_dirty(cur->pagedir, rm_vme->vaddr))
+          {
+            lock_acquire(&file_lock);
+            file_write_at(rm_vme->file, rm_vme->vaddr, rm_vme->read_bytes, rm_vme->offset);
+            lock_release(&file_lock);
+          }
+          free_page(pagedir_get_page(cur->pagedir, rm_vme->vaddr));
+          pagedir_clear_page(cur->pagedir, rm_vme->vaddr);
+        }
+
         next = list_next(vme_e);
         list_remove(vme_e);
         delete_vme(&cur->vm_table, rm_vme);
       }
 
       list_remove(e);
+      lock_acquire(&file_lock);
       file_close(check_mmap->file);
+      lock_release(&file_lock);
       free(check_mmap);
       break;
     }

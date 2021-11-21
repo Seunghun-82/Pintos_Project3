@@ -129,6 +129,9 @@ main (void)
 
   printf ("Boot complete.\n");
   
+  lru_list_init();
+  swap_init();
+
   /* Run actions specified on kernel command line. */
   run_actions (argv);
 

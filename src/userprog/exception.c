@@ -149,15 +149,20 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   if (is_kernel_vaddr (fault_addr) || not_present == 0)
-  {
-     exit(-1);
-  }
+//    if (is_kernel_vaddr (fault_addr) || not_present == 0)
+//   {
+//      printf("kernel \n");
+//      exit(-1);
+//   }
+   check_useradd(fault_addr, f->esp);
+	if(not_present==false)
+		exit(-1);
 
    struct vm_entry* check = find_vme(fault_addr);
 
    if(check == NULL)
    {
+      printf("cvm_entry null\n");
       exit(-1);
    }
 
